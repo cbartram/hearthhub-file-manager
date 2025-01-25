@@ -11,6 +11,16 @@ spec:
       - name: plugin-manager
         image: cbartram/hearthhub-plugin-manager:0.0.1
         imagePullPolicy: IfNotPresent
+        args:
+          - "./plugin-manager"
+          - "-discord_id"
+          - "foo"
+          - "-refresh_token"
+          - "bar"
+          - "-mod_name"
+          - "ValheimPlus"
+          - "-personal_mod"
+          - "false"
         envFrom:
           - configMapRef:
               name: server-resource-config

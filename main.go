@@ -50,12 +50,21 @@ func main() {
 	refreshToken := flag.String("refresh_token", "", "Refresh token")
 	modName := flag.String("mod_name", "", "Valheim mod name")
 	// True if the mod is a custom upload from the user, false if its a widely available and selectable mod
-	personalMod := flag.Bool("personal_mod", false, "Personal Mod")
+	personalModFlag := flag.String("personal_mod", "", "Personal Mod")
 	flag.Parse()
+
+	var personalMod bool
+	if *personalModFlag == "false" {
+		personalMod = false
+	} else {
+		personalMod = true
+	}
 
 	if *discordId == "" || *refreshToken == "" {
 		log.Fatalf("-discord_id and -refresh_token args are required")
 	}
+
+	log.Infof("Discord ID: %s, mod name: %s, personal mod: %v", *discordId, *modName, personalMod)
 
 	err = ScaleDeployment(*discordId, *refreshToken, 0)
 	if err != nil {
@@ -74,7 +83,7 @@ func main() {
 		log.Fatalf("failed to make S3 client: %v", err)
 	}
 
-	err = DownloadFile(ctx, s3Client, *modName, *discordId, *personalMod)
+	err = DownloadFile(ctx, s3Client, *modName, *discordId, personalMod)
 	if err != nil {
 		log.Fatalf("failed to download plugin: %v", err)
 	}
@@ -172,7 +181,7 @@ func PluginsDirExists() bool {
 
 // ScaleDeployment Scales a Kubernetes Valheim Dedicated Server Deployment to either 1 or 0.
 func ScaleDeployment(discordId, refreshToken string, scale int) error {
-	url := "http://hearthhub-mod-api.hearthhub.svc.cluster.local/api/v1/server/scale"
+	url := "http://hearthhub-mod-api.hearthhub.svc.cluster.local:8080/api/v1/server/scale"
 	method := "PUT"
 
 	scaleDeploymentObj := ScaleDeploymentPayload{
@@ -207,6 +216,7 @@ func ScaleDeployment(discordId, refreshToken string, scale int) error {
 
 	bodyString := string(body)
 
+	log.Infof("PUT /api/v1/server/scale: %v response: %s", scale, bodyString)
 	if res.StatusCode != 200 {
 		// If server is already scaled to 0 we get a 400 status code but it's already in the state I want.
 		if scale == 0 && res.StatusCode == 400 && strings.Contains(bodyString, "no server to terminate") {
