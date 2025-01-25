@@ -18,17 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
-
-type Plugin struct {
-	ID        int       `json:"id"`
-	UserID    string    `json:"user_id"`
-	Name      string    `json:"name"`
-	URL       string    `json:"url"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-}
 
 const (
 	pluginsPath = "/valheim/BepInEx/plugins/"
@@ -41,9 +31,6 @@ type ScaleDeploymentPayload struct {
 	Replicas     int    `json:"replicas"`
 }
 
-// 4. Pull mod from S3
-// 5. Unpack mod onto pvc
-// 6. Scale up deployment
 func main() {
 	ctx := context.Background()
 	logger := log.New()
@@ -99,13 +86,15 @@ func main() {
 		log.Fatalf("failed to unzip plugin: %v", err)
 	}
 
+	log.Infof("file unzipped to: %s", pluginsPath)
+
 	// Re-scale up the server
 	err = ScaleDeployment(*discordId, *refreshToken, 1)
 	if err != nil {
 		log.Fatalf("failed to scale deployment back to 1: %v", err)
 	}
 
-	log.Infof("Done.")
+	log.Infof("valheim server deployment scaled to 1. Done.")
 }
 
 // DownloadFile Downloads a mod zip file from S3 and writes it to disk. This function does not unzip the file.
