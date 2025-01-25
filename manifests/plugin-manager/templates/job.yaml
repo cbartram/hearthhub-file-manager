@@ -1,7 +1,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: plugin-install-
+  generateName: mod-install-job-
+  labels:
+    tenant-discord-id: foo
 spec:
   template:
     spec:
@@ -9,18 +11,24 @@ spec:
       - name: plugin-manager
         image: cbartram/hearthhub-plugin-manager:0.0.1
         imagePullPolicy: IfNotPresent
-{{/*        volumeMounts:*/}}
-{{/*        - name: plugins-volume*/}}
-{{/*          mountPath: /mnt/plugins*/}}
+        envFrom:
+          - configMapRef:
+              name: server-resource-config
+          - secretRef:
+              name: aws-creds
+        volumeMounts:
+        - name: plugins-volume
+          mountPath: /valheim/BepInEx/plugins/
+          subPath: plugins
         resources:
           requests:
-            memory: "64Mi"
+            memory: "128Mi"
             cpu: "100m"
           limits:
             memory: "128Mi"
-            cpu: "200m"
+            cpu: "100m"
       restartPolicy: Never
-{{/*      volumes:*/}}
-{{/*      - name: plugins-volume*/}}
-{{/*        persistentVolumeClaim:*/}}
-{{/*          claimName: plugins-volume*/}}
+      volumes:
+      - name: valheim-pvc
+        persistentVolumeClaim:
+          claimName: valheim-pvc-discord-id
