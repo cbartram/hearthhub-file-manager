@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -48,28 +49,40 @@ func main() {
 
 	discordId := flag.String("discord_id", "", "Discord ID")
 	refreshToken := flag.String("refresh_token", "", "Refresh token")
-	modName := flag.String("mod_name", "", "Valheim mod name")
-	// True if the mod is a custom upload from the user, false if its a widely available and selectable mod
-	personalModFlag := flag.String("personal_mod", "", "Personal Mod")
+
+	// The prefix for the object in S3. i.e. /mods/general/ValheimPlus.zip
+	prefix := flag.String("prefix", "", "S3 prefix name including the extension. ex: file.zip")
+
+	// The destination to write the file to i.e /valheim/BepInEx/plugins This path does NOT need to include the file name as it
+	// will be parsed from the prefix automatically.
+	destination := flag.String("destination", "", "PVC volume destination")
+
+	// True if the file is an archive and needs to be unpacked in the destination as well
+	archive := flag.String("archive", "", "If the file being downloaded is an archive and needs unpacked.")
 	flag.Parse()
 
-	var personalMod bool
-	if *personalModFlag == "false" {
-		personalMod = false
+	var isArchive bool
+	if *archive == "true" {
+		log.Infof("given file: %s is an archive and needs unpacked.", *prefix)
+		isArchive = true
 	} else {
-		personalMod = true
+		isArchive = false
 	}
 
 	if *discordId == "" || *refreshToken == "" {
 		log.Fatalf("-discord_id and -refresh_token args are required")
 	}
 
-	log.Infof("Discord ID: %s, mod name: %s, personal mod: %v", *discordId, *modName, personalMod)
+	log.Infof("Discord ID: %s, file name: %s, destination: %s", *discordId, *prefix, *destination)
 
 	err = ScaleDeployment(*discordId, *refreshToken, 0)
 	if err != nil {
 		log.Fatal("failed to scale valheim server deployment: %v", err)
 	}
+
+	// TODO Don't love this I'd rather poll the API to find out when the server is in termination status
+	log.Infof("sleeping for 30 seconds to allow server to terminate")
+	time.Sleep(15 * time.Second)
 
 	if !PluginsDirExists() {
 		log.Fatal("plugins directory does not exist")
@@ -83,19 +96,25 @@ func main() {
 		log.Fatalf("failed to make S3 client: %v", err)
 	}
 
-	err = DownloadFile(ctx, s3Client, *modName, *discordId, personalMod)
+	err = DownloadFile(ctx, s3Client, *prefix, *destination)
 	if err != nil {
-		log.Fatalf("failed to download plugin: %v", err)
+		log.Fatalf("failed to download file: %v", err)
 	}
 
-	log.Infof("mod file: %s downloaded successfully for user: %s", *modName, *discordId)
+	log.Infof("file: %s downloaded successfully for user: %s", *prefix, *discordId)
 
-	err = UnzipFile(fmt.Sprintf("%s.zip", *modName), pluginsPath)
-	if err != nil {
-		log.Fatalf("failed to unzip plugin: %v", err)
+	fileName := filepath.Base(*prefix)
+	finalDestination := fmt.Sprintf("%s/%s", *destination, fileName)
+	if isArchive {
+		// Unpack the file from /valheim/BepInEx/plugins/ValheimPlus.zip to /valheim/BepInEx/plugins/
+		err = UnzipFile(finalDestination, *destination)
+		if err != nil {
+			log.Fatalf("failed to unzip file: %s err: %v", finalDestination, err)
+		}
+		log.Infof("file unzipped to: %s", *destination)
+	} else {
+		log.Infof("skipping unpack for %s", finalDestination)
 	}
-
-	log.Infof("file unzipped to: %s", pluginsPath)
 
 	// Re-scale up the server
 	err = ScaleDeployment(*discordId, *refreshToken, 1)
@@ -107,34 +126,34 @@ func main() {
 }
 
 // DownloadFile Downloads a mod zip file from S3 and writes it to disk. This function does not unzip the file.
-func DownloadFile(ctx context.Context, s3Client *s3.Client, modName, discordId string, personalMod bool) error {
-	var key string
-	if personalMod {
-		key = fmt.Sprintf("mods/%s/%s.zip", discordId, modName)
-	} else {
-		key = fmt.Sprintf("mods/general/%s.zip", modName)
-	}
-
+func DownloadFile(ctx context.Context, s3Client *s3.Client, prefix, destination string) error {
 	result, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
+		Key:    aws.String(prefix),
 	})
 	if err != nil {
 		var noKey *types.NoSuchKey
 		if errors.As(err, &noKey) {
-			log.Printf("can't get object %s from bucket %s. no such key exists", key, bucketName)
+			log.Printf("can't get object %s from bucket %s. no such key exists", prefix, bucketName)
 			err = noKey
 		} else {
-			log.Infof("failed to get object %v:%v err: %v", bucketName, key, err)
+			log.Infof("failed to get object %v:%v err: %v", bucketName, prefix, err)
 		}
 		return err
 	}
 
 	defer result.Body.Close()
-	file, err := os.Create(fmt.Sprintf("%s.zip", modName))
+
+	// For zip files (mods) this is a bit redundant as both the zip file and the dll file for the mod
+	// will be present however, BepInEx should be smart enough to pick up only the DLL files. Having extra zip files
+	// on the PVC shouldn't be an issue.
+	fileName := filepath.Base(prefix)
+	finalPath := fmt.Sprintf("%s/%s", destination, fileName)
+	log.Infof("creating file with name: %s in %s", fileName, finalPath)
+	file, err := os.Create(finalPath)
 
 	if err != nil {
-		log.Errorf("failed to create zip file %v.zip err: %v", modName, err)
+		log.Errorf("failed to create file %v err: %v", prefix, err)
 		return err
 	}
 
@@ -142,7 +161,7 @@ func DownloadFile(ctx context.Context, s3Client *s3.Client, modName, discordId s
 	body, err := io.ReadAll(result.Body)
 
 	if err != nil {
-		log.Errorf("failed to read object body from %v error: %v", key, err)
+		log.Errorf("failed to read object body from %v error: %v", prefix, err)
 	}
 	_, err = file.Write(body)
 	return err
