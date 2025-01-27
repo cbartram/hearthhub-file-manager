@@ -81,7 +81,7 @@ func main() {
 	}
 
 	// TODO Don't love this I'd rather poll the API to find out when the server is in termination status
-	log.Infof("sleeping for 30 seconds to allow server to terminate")
+	log.Infof("sleeping for 15 seconds to allow server to terminate")
 	time.Sleep(15 * time.Second)
 
 	if !PluginsDirExists() {
@@ -148,7 +148,12 @@ func DownloadFile(ctx context.Context, s3Client *s3.Client, prefix, destination 
 	// will be present however, BepInEx should be smart enough to pick up only the DLL files. Having extra zip files
 	// on the PVC shouldn't be an issue.
 	fileName := filepath.Base(prefix)
-	finalPath := fmt.Sprintf("%s/%s", destination, fileName)
+
+	if !strings.HasSuffix(destination, "/") {
+		destination += "/"
+	}
+
+	finalPath := fmt.Sprintf("%s%s", destination, fileName)
 	log.Infof("creating file with name: %s in %s", fileName, finalPath)
 	file, err := os.Create(finalPath)
 
@@ -237,7 +242,7 @@ func ScaleDeployment(discordId, refreshToken string, scale int) error {
 
 	log.Infof("PUT /api/v1/server/scale: %v response: %s", scale, bodyString)
 	if res.StatusCode != 200 {
-		// If server is already scaled to 0 we get a 400 status code but it's already in the state I want.
+		// If server is already scaled to 0 we get a 400 status code, but it's already in the state I want.
 		if scale == 0 && res.StatusCode == 400 && strings.Contains(bodyString, "no server to terminate") {
 			return nil
 		}
@@ -256,6 +261,9 @@ func UnzipFile(zipFile, dest string) error {
 		return err
 	}
 	defer reader.Close()
+
+	// Cleanup
+	defer os.Remove(zipFile)
 
 	for _, file := range reader.File {
 		path := filepath.Join(dest, file.Name)
