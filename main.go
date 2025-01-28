@@ -59,7 +59,16 @@ func main() {
 
 	// True if the file is an archive and needs to be unpacked in the destination as well
 	archive := flag.String("archive", "", "If the file being downloaded is an archive and needs unpacked.")
+
+	// This determines if the job writes and unpacks files it gets from S3 or if it reads the files in the zip file and deletes
+	// the files in the destination dir.
+	op := flag.String("op", "", "Operation to perform either \"write\" or \"delete\"")
 	flag.Parse()
+
+	if *op != "write" && *op != "delete" {
+		logger.Fatal("Invalid \"op\" argument specified. Must be one of: write, delete")
+		return
+	}
 
 	var isArchive bool
 	if *archive == "true" {
@@ -105,15 +114,25 @@ func main() {
 
 	fileName := filepath.Base(*prefix)
 	finalDestination := fmt.Sprintf("%s/%s", *destination, fileName)
-	if isArchive {
-		// Unpack the file from /valheim/BepInEx/plugins/ValheimPlus.zip to /valheim/BepInEx/plugins/
-		err = UnzipFile(finalDestination, *destination)
-		if err != nil {
-			log.Fatalf("failed to unzip file: %s err: %v", finalDestination, err)
+
+	if *op == "write" {
+		if isArchive {
+			// Unpack the file from /valheim/BepInEx/plugins/ValheimPlus.zip to /valheim/BepInEx/plugins/
+			err = UnzipFile(finalDestination, *destination)
+			if err != nil {
+				log.Fatalf("failed to unzip file: %s err: %v", finalDestination, err)
+			}
+			log.Infof("file unzipped to: %s", *destination)
+		} else {
+			log.Infof("skipping unpack for %s", finalDestination)
 		}
-		log.Infof("file unzipped to: %s", *destination)
 	} else {
-		log.Infof("skipping unpack for %s", finalDestination)
+		log.Infof("job is a delete operation")
+		err = RemoveFilesFromZip(finalDestination, *destination)
+		if err != nil {
+			log.Errorf("failed to remove files from zip: %v", err)
+			return
+		}
 	}
 
 	// Re-scale up the server
@@ -123,6 +142,34 @@ func main() {
 	}
 
 	log.Infof("valheim server deployment scaled to 1. Done.")
+}
+
+// RemoveFilesFromZip Removes all the files that are present in a zip file from the destination as well as the zip file itself.
+// This function reads the zip file to determine which files to delete and is used for mod uninstallation.
+func RemoveFilesFromZip(zipFilePath, destination string) error {
+	zipReader, err := zip.OpenReader(zipFilePath)
+	if err != nil {
+		log.Fatalf("Failed to open ZIP file: %v", err)
+	}
+	defer zipReader.Close()
+
+	// Iterate over the files in the ZIP and remove them from the PVC
+	for _, f := range zipReader.File {
+		filePath := filepath.Join(destination, f.Name)
+		log.Infof("removing file %s", filePath)
+		if err := os.Remove(filePath); err != nil {
+			if os.IsNotExist(err) {
+				log.Infof("file %s does not exist, skipping...", filePath)
+				continue
+			}
+			log.Errorf("Failed to remove file %s: %v", filePath, err)
+		}
+	}
+
+	if err := os.Remove(zipFilePath); err != nil {
+		log.Fatalf("failed to remove temporary ZIP file: %v", err)
+	}
+	return nil
 }
 
 // DownloadFile Downloads a mod zip file from S3 and writes it to disk. This function does not unzip the file.
