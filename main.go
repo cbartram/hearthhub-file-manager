@@ -278,7 +278,7 @@ func ScaleDeployment(discordId, refreshToken string, scale int) error {
 	if err != nil {
 		return err
 	}
-	req.SetBasicAuth("hearthhub", os.Getenv("BASIC_AUTH_PASSWORD"))
+	req.SetBasicAuth(discordId, refreshToken)
 
 	res, err := client.Do(req)
 
