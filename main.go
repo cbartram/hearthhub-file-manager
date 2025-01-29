@@ -86,7 +86,7 @@ func main() {
 
 	err = ScaleDeployment(*discordId, *refreshToken, 0)
 	if err != nil {
-		log.Fatal("failed to scale valheim server deployment: %v", err)
+		log.Fatalf("failed to scale valheim server deployment: %v", err)
 	}
 
 	// TODO Don't love this I'd rather poll the API to find out when the server is in termination status
@@ -127,11 +127,18 @@ func main() {
 			log.Infof("skipping unpack for %s", finalDestination)
 		}
 	} else {
-		log.Infof("job is a delete operation")
-		err = RemoveFilesFromZip(finalDestination, *destination)
-		if err != nil {
-			log.Errorf("failed to remove files from zip: %v", err)
-			return
+		log.Infof("job is a delete operation: is archive: %v", isArchive)
+		if isArchive {
+			err = RemoveFilesFromZip(finalDestination, *destination)
+			if err != nil {
+				log.Errorf("failed to remove files from zip: %v", err)
+				return
+			}
+		} else {
+			err = os.Remove(finalDestination)
+			if err != nil {
+				log.Errorf("failed to remove file: %v", err)
+			}
 		}
 	}
 
@@ -140,7 +147,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to scale deployment back to 1: %v", err)
 	}
-
 	log.Infof("valheim server deployment scaled to 1. Done.")
 }
 
@@ -272,6 +278,7 @@ func ScaleDeployment(discordId, refreshToken string, scale int) error {
 	if err != nil {
 		return err
 	}
+	req.SetBasicAuth("hearthhub", os.Getenv("BASIC_AUTH_PASSWORD"))
 
 	res, err := client.Do(req)
 
