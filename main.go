@@ -1,10 +1,10 @@
 package main
 
 import (
-	"cbartram/hearthhub-plugin-manager/cmd"
 	"context"
 	"flag"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/cbartram/hearthhub-plugin-manager/cmd"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"time"
