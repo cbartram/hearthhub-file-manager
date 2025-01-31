@@ -3,6 +3,7 @@ package main
 import (
 	"cbartram/hearthhub-plugin-manager/cmd"
 	"context"
+	"flag"
 	"github.com/aws/aws-sdk-go-v2/config"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -33,7 +34,11 @@ func main() {
 		log.Fatalf("unable to load AWS SDK config: %v", err)
 	}
 
-	fileManager := cmd.MakeFileManager()
+	flagSet := flag.NewFlagSet("file-manager", flag.ExitOnError)
+	fileManager, err := cmd.MakeFileManager(flagSet, os.Args[1:])
+	if err != nil {
+		log.Fatalf("unable to make file manager: %v", err)
+	}
 	hearthhubClient := cmd.MakeHearthHubClient(os.Getenv("API_BASE_URL"))
 
 	err = hearthhubClient.ScaleDeployment(fileManager, 0)
