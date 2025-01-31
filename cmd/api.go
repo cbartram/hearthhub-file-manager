@@ -48,7 +48,7 @@ func (h *HearthHubClient) ScaleDeployment(fileManager *FileManager, scale int) e
 	log.Infof("response: PUT %s/api/v1/server/scale: %v response: %s", h.BaseUrl, scale, bodyString)
 
 	if res.StatusCode != 200 {
-		// If server is already scaled to 0 we get a 400 status code, but it's already in the state I want.
+		// If server is already scaled to 0 we get a 400 status code, but it's already in the state we want.
 		if scale == 0 && res.StatusCode == 400 && strings.Contains(bodyString, "no server to terminate") {
 			return nil
 		}

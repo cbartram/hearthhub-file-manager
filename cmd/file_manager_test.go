@@ -3,25 +3,10 @@ package cmd
 import (
 	"flag"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"os"
 	"path/filepath"
 	"testing"
 )
-
-type MockArchiveHandler struct {
-	mock.Mock
-}
-
-func (m *MockArchiveHandler) UnzipFile() error {
-	args := m.Called()
-	return args.Error(0)
-}
-
-func (m *MockArchiveHandler) RemoveFilesFromZip() error {
-	args := m.Called()
-	return args.Error(0)
-}
 
 func TestMakeFileManager(t *testing.T) {
 	t.Run("should create a file manager", func(t *testing.T) {
