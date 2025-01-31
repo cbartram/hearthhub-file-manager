@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
@@ -13,7 +13,11 @@ import (
 
 type S3Client struct {
 	BucketName string
-	client     *s3.Client
+	client     ObjectStore
+}
+
+type ObjectStore interface {
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 }
 
 // MakeS3Client Creates a new S3 Client object.
@@ -32,14 +36,7 @@ func (s *S3Client) DownloadFile(fileManager *FileManager) error {
 		Key:    aws.String(fileManager.Prefix),
 	})
 	if err != nil {
-		var noKey *types.NoSuchKey
-		if errors.As(err, &noKey) {
-			log.Errorf("can't get object %s from bucket %s. no such key exists", fileManager.Prefix, s.BucketName)
-			err = noKey
-		} else {
-			log.Infof("failed to get object %v:%v err: %v", s.BucketName, fileManager.Prefix, err)
-		}
-		return err
+		return errors.New(fmt.Sprintf("failed to get object %v:%v err: %v", s.BucketName, fileManager.Prefix, err))
 	}
 
 	defer result.Body.Close()
@@ -57,6 +54,7 @@ func (s *S3Client) DownloadFile(fileManager *FileManager) error {
 
 	if err != nil {
 		log.Errorf("failed to read object body from %v error: %v", fileManager.Prefix, err)
+		return err
 	}
 	_, err = file.Write(body)
 

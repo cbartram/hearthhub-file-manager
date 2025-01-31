@@ -37,6 +37,21 @@ To build with docker run the following replacing the `0.0.1` tag with your desir
 ./build.sh 0.0.1
 ```
 
+## Testing
+
+Run unit tests for this software with:
+
+```shell
+go test ./... -v
+```
+
+To generate coverage reports run:
+
+```shell
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
 ## Built With
 
 - [Kubernetes](https://kubernetes.io) - Container orchestration platform
