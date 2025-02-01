@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -101,4 +102,93 @@ func TestDownloadFile_CreateFileError(t *testing.T) {
 	// Assert
 	require.Error(t, err)
 	mockS3.AssertExpectations(t)
+}
+
+func TestSyncWorldFiles(t *testing.T) {
+	tmp, err := os.CreateTemp("", "test-*.fwl")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	defer os.RemoveAll(tmp.Name())
+
+	mockS3 := new(MockS3Client)
+	fileManager := &FileManager{
+		Prefix:              "foo/bar/" + tmp.Name(),
+		FileName:            tmp.Name(),
+		FileDestinationPath: tmp.Name(),
+	}
+	s3Client := &S3Client{
+		BucketName: "test-bucket",
+		client:     mockS3,
+	}
+
+	mockS3.On("GetObject", mock.Anything, mock.Anything, mock.Anything).Return(&s3.GetObjectOutput{
+		Body: io.NopCloser(bytes.NewReader([]byte("test content"))),
+	}, nil)
+
+	err = SyncWorldFiles(s3Client, fileManager)
+	assert.Nil(t, err)
+	_, err = os.Stat(strings.TrimSuffix(tmp.Name(), ".fwl") + ".db")
+	assert.Nil(t, err)
+	mockS3.AssertExpectations(t)
+}
+
+func TestSyncWorldFilesDB(t *testing.T) {
+	tmp, err := os.CreateTemp("", "test-*.db")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	defer os.RemoveAll(tmp.Name())
+
+	mockS3 := new(MockS3Client)
+	fileManager := &FileManager{
+		Prefix:              "foo/bar" + tmp.Name(),
+		FileName:            tmp.Name(),
+		FileDestinationPath: tmp.Name(),
+	}
+	s3Client := &S3Client{
+		BucketName: "test-bucket",
+		client:     mockS3,
+	}
+
+	mockS3.On("GetObject", mock.Anything, mock.Anything, mock.Anything).Return(&s3.GetObjectOutput{
+		Body: io.NopCloser(bytes.NewReader([]byte("test content"))),
+	}, nil)
+
+	err = SyncWorldFiles(s3Client, fileManager)
+	assert.Nil(t, err)
+
+	// Assert that the .fwl version of the file exists meaning it was synced
+	_, err = os.Stat(strings.TrimSuffix(tmp.Name(), ".db") + ".fwl")
+	assert.Nil(t, err)
+	mockS3.AssertExpectations(t)
+}
+
+func TestSyncWorldFilesNoFiles(t *testing.T) {
+	tmp, err := os.CreateTemp("", "test-*.config")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	defer os.RemoveAll(tmp.Name())
+
+	mockS3 := new(MockS3Client)
+	fileManager := &FileManager{
+		Prefix:              "foo/bar" + tmp.Name(),
+		FileName:            tmp.Name(),
+		FileDestinationPath: tmp.Name(),
+	}
+	s3Client := &S3Client{
+		BucketName: "test-bucket",
+		client:     mockS3,
+	}
+
+	mockS3.On("GetObject", mock.Anything, mock.Anything, mock.Anything).Return(&s3.GetObjectOutput{
+		Body: io.NopCloser(bytes.NewReader([]byte("test content"))),
+	}, nil)
+
+	err = SyncWorldFiles(s3Client, fileManager)
+	assert.Nil(t, err)
 }

@@ -60,6 +60,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to download file: %v", err)
 	}
+	err = cmd.SyncWorldFiles(s3Client, fileManager)
+	if err != nil {
+		log.Errorf("failed to sync world files: %v", err)
+	}
 
 	log.Infof("file: %s downloaded successfully to: %s for user: %s", fileManager.Prefix, fileManager.FileDestinationPath, fileManager.DiscordId)
 

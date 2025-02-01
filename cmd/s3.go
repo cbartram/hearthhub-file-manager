@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"strings"
 )
 
 type S3Client struct {
@@ -59,4 +60,37 @@ func (s *S3Client) DownloadFile(fileManager *FileManager) error {
 	_, err = file.Write(body)
 
 	return err
+}
+
+// SyncWorldFiles Synchronizes a .db or .fwl file along with its pair to disk. I.e. if the prefix for the file
+// in s3 ends with .db this will also download the corresponding .fwl file and vice versa. This ensures that world
+// file stay synchronized between S3 and the pvc.
+func SyncWorldFiles(s3Client *S3Client, fileManager *FileManager) error {
+	var tmpManager FileManager
+	if strings.HasSuffix(fileManager.Prefix, ".db") {
+		log.Infof("file is a *.db, syncing paired *.fwl")
+		tmpManager = FileManager{
+			Prefix:              fmt.Sprintf("%s%s", strings.TrimSuffix(fileManager.Prefix, ".db"), ".fwl"),
+			FileName:            fmt.Sprintf("%s%s", strings.TrimSuffix(fileManager.FileName, ".db"), ".fwl"),
+			FileDestinationPath: fmt.Sprintf("%s%s", strings.TrimSuffix(fileManager.FileDestinationPath, ".db"), ".fwl"),
+		}
+	} else if strings.HasSuffix(fileManager.Prefix, ".fwl") {
+		log.Infof("file is a *.fwl, syncing paired *.db")
+		tmpManager = FileManager{
+			Prefix:              fmt.Sprintf("%s%s", strings.TrimSuffix(fileManager.Prefix, ".fwl"), ".db"),
+			FileName:            fmt.Sprintf("%s%s", strings.TrimSuffix(fileManager.FileName, ".fwl"), ".db"),
+			FileDestinationPath: fmt.Sprintf("%s%s", strings.TrimSuffix(fileManager.FileDestinationPath, ".fwl"), ".db"),
+		}
+	} else {
+		log.Infof("file: %s is not a world file. skipping sync", fileManager.Prefix)
+		return nil
+	}
+
+	err := s3Client.DownloadFile(&tmpManager)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("synced world file: %s to: %s", tmpManager.Prefix, tmpManager.FileDestinationPath)
+	return nil
 }
