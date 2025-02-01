@@ -72,10 +72,14 @@ func main() {
 		log.Fatalf("failed to unpack or remove files: %v", err)
 	}
 
-	// Re-scale up the server
-	err = hearthhubClient.ScaleDeployment(fileManager, 1)
-	if err != nil {
-		log.Fatalf("failed to scale deployment back to 1: %v", err)
-	}
-	log.Infof("valheim server deployment scaled to 1. Done.")
+	// Scaling the server back up has been disabled because
+	// - Users can select a different world or modify server args after a mod/world/config is installed
+	// - Allows users to install multiple mods, files, config, saves without the server having to spin up and down every time
+	// - Once a user is fully done configuring their server they can spin it up once with the PUT /api/v1/server/scale code
+
+	//err = hearthhubClient.ScaleDeployment(fileManager, 1)
+	//if err != nil {
+	//	log.Fatalf("failed to scale deployment back to 1: %v", err)
+	//}
+	log.Infof("done.")
 }
