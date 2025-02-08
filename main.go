@@ -72,6 +72,13 @@ func main() {
 		log.Fatalf("failed to unpack or remove files: %v", err)
 	}
 
+	// TODO Send a message to rabbitmq notifying the mod has finished installing
+
+	// TODO Finally we need to update the user custom:installed_mods with the file that was installed or uninstalled
+	// Couple of scenarios here
+	// - first time the mod is being installed: [] => [{name: mod, installed: true}]
+	// - first time uninstall: [{name: mod, installed: false}]
+
 	// Scaling the server back up has been disabled because
 	// - Users can select a different world or modify server args after a mod/world/config is installed
 	// - Allows users to install multiple mods, files, config, saves without the server having to spin up and down every time
