@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/cbartram/hearthhub-plugin-manager/cmd"
 	log "github.com/sirupsen/logrus"
@@ -72,12 +73,31 @@ func main() {
 		log.Fatalf("failed to unpack or remove files: %v", err)
 	}
 
-	// TODO Send a message to rabbitmq notifying the mod has finished installing
+	rabbit, err := cmd.MakeRabbitMQService()
+	if err != nil {
+		log.Fatalf("failed to make rabbitmq service: %v", err)
+	}
 
-	// TODO Finally we need to update the user custom:installed_mods with the file that was installed or uninstalled
-	// Couple of scenarios here
-	// - first time the mod is being installed: [] => [{name: mod, installed: true}]
-	// - first time uninstall: [{name: mod, installed: false}]
+	// TODO: In the future consider publishing failure messages as well.
+	err = rabbit.PublishMessage(&cmd.Message{
+		Type:      "ContainerCompleteSuccess",
+		Body:      fmt.Sprintf(`{"containerName": "%s", "containerType": "file-install"}`, os.Getenv("HOSTNAME")),
+		DiscordId: fileManager.DiscordId,
+	})
+
+	// This check lets us know this is indeed a mod file which has been installed
+	// Therefore, we need to update the user custom:installed_mods with the file that was installed or uninstalled
+	if fileManager.Archive {
+		cognito := cmd.MakeCognitoService(cfg)
+		user, err := cognito.AuthUser(context.Background(), &fileManager.RefreshToken, &fileManager.DiscordId)
+		if err != nil {
+			log.Fatalf("failed to authenticate user: %v", err)
+		}
+		err = cognito.MergeInstalledMods(context.Background(), user, fileManager.FileName, fileManager.Op)
+		if err != nil {
+			log.Fatalf("failed to merge installed mods: %v", err)
+		}
+	}
 
 	// Scaling the server back up has been disabled because
 	// - Users can select a different world or modify server args after a mod/world/config is installed
