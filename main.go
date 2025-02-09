@@ -80,8 +80,8 @@ func main() {
 
 	// TODO: In the future consider publishing failure messages as well.
 	err = rabbit.PublishMessage(&cmd.Message{
-		Type:      "ContainerCompleteSuccess",
-		Body:      fmt.Sprintf(`{"containerName": "%s", "containerType": "file-install"}`, os.Getenv("HOSTNAME")),
+		Type:      "PreStop",
+		Body:      fmt.Sprintf(`{"containerName": "%s", "operation": "%s" "containerType": "file-install"}`, os.Getenv("HOSTNAME"), fileManager.Op),
 		DiscordId: fileManager.DiscordId,
 	})
 
