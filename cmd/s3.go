@@ -37,7 +37,7 @@ func (s *S3Client) DownloadFile(fileManager *FileManager) error {
 		Key:    aws.String(fileManager.Prefix),
 	})
 	if err != nil {
-		return errors.New(fmt.Sprintf("failed to get object %v:%v err: %v", s.BucketName, fileManager.Prefix, err))
+		return errors.New(fmt.Sprintf("failed to get object s3://%v/%v err: %v", s.BucketName, fileManager.Prefix, err))
 	}
 
 	defer result.Body.Close()
