@@ -101,9 +101,22 @@ func (f *FileManager) DoOperation() error {
 				return err
 			}
 		} else {
-			err := os.Remove(f.FileDestinationPath)
-			if err != nil {
-				return err
+			// Handle removing .db and .fwl files when the op is a remove (similar to the s3 sync but opposite)
+			if strings.HasSuffix(f.Prefix, ".db") {
+				log.Infof("file is a .db save, removing linked .fwl file")
+				os.Remove(f.FileDestinationPath)
+				base := strings.TrimSuffix(f.FileDestinationPath, ".db")
+				os.Remove(fmt.Sprintf("%s%s", base, ".fwl"))
+			} else if strings.HasSuffix(f.Prefix, ".fwl") {
+				log.Infof("file is a .fwl save, removing linked .db file")
+				os.Remove(f.FileDestinationPath)
+				base := strings.TrimSuffix(f.FileDestinationPath, ".fwl")
+				os.Remove(fmt.Sprintf("%s%s", base, ".db"))
+			} else {
+				err := os.Remove(f.FileDestinationPath)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

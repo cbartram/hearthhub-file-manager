@@ -8,6 +8,7 @@ import (
 	"github.com/cbartram/hearthhub-plugin-manager/cmd"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -84,18 +85,26 @@ func main() {
 		Body:      fmt.Sprintf(`{"containerName": "%s", "operation": "%s", "containerType": "file-install"}`, os.Getenv("HOSTNAME"), fileManager.Op),
 		DiscordId: fileManager.DiscordId,
 	})
+	cognito := cmd.MakeCognitoService(cfg)
+	user, err := cognito.AuthUser(context.Background(), &fileManager.RefreshToken, &fileManager.DiscordId)
+	if err != nil {
+		log.Fatalf("failed to authenticate user: %v", err)
+	}
 
 	// This check lets us know this is indeed a mod file which has been installed
 	// Therefore, we need to update the user custom:installed_mods with the file that was installed or uninstalled
 	if fileManager.Archive {
-		cognito := cmd.MakeCognitoService(cfg)
-		user, err := cognito.AuthUser(context.Background(), &fileManager.RefreshToken, &fileManager.DiscordId)
-		if err != nil {
-			log.Fatalf("failed to authenticate user: %v", err)
-		}
-		err = cognito.MergeInstalledMods(context.Background(), user, fileManager.FileName, fileManager.Op)
+		err = cognito.MergeInstalledFiles(context.Background(), user, fileManager.FileName, "custom:installed_mods", fileManager.Op)
 		if err != nil {
 			log.Fatalf("failed to merge installed mods: %v", err)
+		}
+	}
+
+	// It was a backup file that was installed
+	if strings.HasSuffix(fileManager.FileDestinationPath, ".fwl") || strings.HasSuffix(fileManager.FileDestinationPath, ".db") {
+		err = cognito.MergeInstalledFiles(context.Background(), user, fileManager.FileName, "custom:installed_backups", fileManager.Op)
+		if err != nil {
+			log.Fatalf("failed to merge installed backups: %v", err)
 		}
 	}
 

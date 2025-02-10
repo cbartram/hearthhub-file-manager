@@ -20,7 +20,7 @@ type CognitoService interface {
 	GetUserAttributes(ctx context.Context, accessToken *string) ([]types.AttributeType, error)
 	AuthUser(ctx context.Context, refreshToken, discordId *string) (*CognitoUser, error)
 	UpdateUserAttributes(ctx context.Context, accessToken *string, attributes []types.AttributeType) error
-	MergeInstalledMods(ctx context.Context, user *CognitoUser, modName, op string) error
+	MergeInstalledFiles(ctx context.Context, user *CognitoUser, modName, attributeName, op string) error
 }
 
 type CognitoServiceImpl struct {
@@ -52,7 +52,7 @@ type SessionData struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-type InstalledMod struct {
+type InstalledFile struct {
 	Name      string `json:"name"`
 	Installed bool   `json:"installed"`
 }
@@ -79,15 +79,14 @@ func MakeCognitoSecretHash(userId, clientId, clientSecret string) string {
 	return base64.StdEncoding.EncodeToString(digest)
 }
 
-// MergeInstalledMods Updates a users attribute called: custom:installed_mods merging the existing
+// MergeInstalledFiles Updates a users attribute called: custom:installed_mods merging the existing
 // state with any new mod file that was just installed.
 // Couple of scenarios here:
 // - first time the mod is being installed: [] => [{name: mod, installed: true}]
 // - first time uninstall: [{name: mod, installed: false}]
 // - toggling from uninstall to install for existing mod: [{name: mod, installed: false}] => [{name: mod, installed: true}]
-func (c *CognitoServiceImpl) MergeInstalledMods(ctx context.Context, user *CognitoUser, modName, op string) error {
-	var installedMods []InstalledMod
-	installedModsAttrName := "custom:installed_mods"
+func (c *CognitoServiceImpl) MergeInstalledFiles(ctx context.Context, user *CognitoUser, fileName, attributeName, op string) error {
+	var installedMods []InstalledFile
 
 	attributes, err := c.GetUserAttributes(ctx, &user.Credentials.AccessToken)
 	if err != nil {
@@ -96,7 +95,7 @@ func (c *CognitoServiceImpl) MergeInstalledMods(ctx context.Context, user *Cogni
 	}
 
 	for _, attribute := range attributes {
-		if *attribute.Name == installedModsAttrName {
+		if *attribute.Name == attributeName {
 			// Deserialize the json string value of the attribute into a struct
 			err := json.Unmarshal([]byte(*attribute.Value), &installedMods)
 			if err != nil {
@@ -107,13 +106,13 @@ func (c *CognitoServiceImpl) MergeInstalledMods(ctx context.Context, user *Cogni
 		}
 	}
 
-	var mergedMods []InstalledMod
+	var mergedMods []InstalledFile
 	foundMod := false
 	for _, mod := range installedMods {
 		// case 2 and 3: mod already exists in the list (it's been installed before), toggle its value accordingly
-		if mod.Name == modName {
+		if mod.Name == fileName {
 			log.Infof("mod %s already exists in user attributes", mod.Name)
-			tmp := InstalledMod{
+			tmp := InstalledFile{
 				Name: mod.Name,
 			}
 			if op == "write" {
@@ -132,9 +131,9 @@ func (c *CognitoServiceImpl) MergeInstalledMods(ctx context.Context, user *Cogni
 
 	// case 1: Mod does not exist in the list (it's the first time installing)
 	if !foundMod {
-		log.Infof("mod %s not found in user attributes, first time install", modName)
-		mergedMods = append(mergedMods, InstalledMod{
-			Name:      modName,
+		log.Infof("mod %s not found in user attributes, first time install", fileName)
+		mergedMods = append(mergedMods, InstalledFile{
+			Name:      fileName,
 			Installed: true,
 		})
 	}
@@ -143,7 +142,7 @@ func (c *CognitoServiceImpl) MergeInstalledMods(ctx context.Context, user *Cogni
 	mergedModByte, _ := json.Marshal(mergedMods)
 	mergedModStr := string(mergedModByte)
 	attr := types.AttributeType{
-		Name:  aws.String(installedModsAttrName),
+		Name:  aws.String(attributeName),
 		Value: &mergedModStr,
 	}
 
