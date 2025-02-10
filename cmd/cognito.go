@@ -14,7 +14,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type CognitoService interface {
@@ -112,7 +111,7 @@ func (c *CognitoServiceImpl) MergeInstalledMods(ctx context.Context, user *Cogni
 	foundMod := false
 	for _, mod := range installedMods {
 		// case 2 and 3: mod already exists in the list (it's been installed before), toggle its value accordingly
-		if mod.Name == strings.TrimSuffix(modName, filepath.Ext(modName)) {
+		if mod.Name == modName {
 			log.Infof("mod %s already exists in user attributes", mod.Name)
 			tmp := InstalledMod{
 				Name: mod.Name,
@@ -122,7 +121,7 @@ func (c *CognitoServiceImpl) MergeInstalledMods(ctx context.Context, user *Cogni
 			} else {
 				tmp.Installed = false
 			}
-			log.Infof("appending InstalledMod{name=%s, installed=%v}", tmp.Name, tmp.Installed)
+			log.Infof("updating InstalledMod{name=%s, installed=%v}", tmp.Name, tmp.Installed)
 			mergedMods = append(mergedMods, tmp)
 			foundMod = true
 		} else {
