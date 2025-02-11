@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	pluginsPath = "/valheim/BepInEx/plugins/"
+	modPath     = "/valheim/BepInEx/plugins/"
+	backupsPath = "/root/.config/unity3d/IronGate/Valheim/worlds_local/"
+	configPath  = "/valheim/BepInEx/config/"
 )
 
 func main() {
@@ -52,8 +54,8 @@ func main() {
 	log.Infof("sleeping for 15 seconds to allow server to terminate")
 	time.Sleep(15 * time.Second)
 
-	if !fileManager.DirExists(pluginsPath) {
-		log.Fatal("plugins directory does not exist")
+	if !fileManager.DirExists(modPath) || !fileManager.DirExists(configPath) || !fileManager.DirExists(backupsPath) {
+		log.Fatal("required conf, backup, or mod directory does not exist")
 	}
 
 	// Download and unzip the mod file from S3 unpacking it onto the PVC

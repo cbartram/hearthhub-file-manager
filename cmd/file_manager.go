@@ -22,6 +22,12 @@ type FileManager struct {
 	ArchiveHandler      *Archive
 }
 
+var (
+	COPY   = "copy"
+	WRITE  = "write"
+	DELETE = "delete"
+)
+
 func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error) {
 	var discordId, refreshToken, prefix, destination, archive, op string
 	flagSet.StringVar(&discordId, "discord_id", "", "Discord ID")
@@ -36,8 +42,8 @@ func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error)
 		return nil, fmt.Errorf("failed to parse flags: %v", err)
 	}
 
-	if op != "write" && op != "delete" {
-		return nil, errors.New("invalid \"op\" argument specified. Must be one of: write, delete")
+	if op != WRITE && op != DELETE && op != COPY {
+		return nil, errors.New("invalid \"op\" argument specified. Must be one of: write, delete, copy")
 	}
 
 	var isArchive bool
@@ -55,12 +61,26 @@ func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error)
 	log.Infof("Discord ID: %s, file name: %s, destination: %s is_archive: %v operation: %s", discordId, prefix, destination, isArchive, op)
 
 	fileName := filepath.Base(prefix)
+	var finalPath string
 	temporaryDestination := destination
-	if !strings.HasSuffix(temporaryDestination, "/") {
-		temporaryDestination += "/"
+
+	if op == COPY && isArchive {
+		return nil, errors.New("\"copy\" operation and archive cannot be used together")
 	}
 
-	finalPath := fmt.Sprintf("%s%s", temporaryDestination, fileName)
+	if op != COPY {
+		if !strings.HasSuffix(temporaryDestination, "/") {
+			temporaryDestination += "/"
+		}
+	} else {
+		// For copy op's we expect the destination to end with a file not a dir
+		if strings.HasSuffix(destination, "/") {
+			temporaryDestination = strings.TrimSuffix(destination, "/")
+		}
+	}
+
+	finalPath = fmt.Sprintf("%s%s", temporaryDestination, fileName)
+	log.Infof("full destination path for file: %s", finalPath)
 	return &FileManager{
 		DiscordId:           discordId,
 		RefreshToken:        refreshToken,
@@ -80,9 +100,10 @@ func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error)
 // DoOperation Performs the desired operation specified in the "op" flag. This will either unpack a zip to the
 // specified destination or search through the zip and remove all files corresponding to the zip at the specified
 // destination. This ensures mods can be uninstalled without having to keep track of which files belong to which
-// mod with any type of manifest. The zip file for the mod tracks this info for us!
+// mod with any type of manifest. Note: copy operations don't need special handling here since they are technically
+// just write ops directed at a file rather than a dir (overwriting the file).
 func (f *FileManager) DoOperation() error {
-	if f.Op == "write" {
+	if f.Op == WRITE || f.Op == COPY {
 		if f.Archive {
 			// Unpack the file from /valheim/BepInEx/plugins/ValheimPlus.zip to /valheim/BepInEx/plugins/
 			err := f.ArchiveHandler.UnzipFile()
@@ -125,7 +146,6 @@ func (f *FileManager) DoOperation() error {
 
 // DirExists Checks for the presence of a directory on the (assumed) mounted PVC.
 func (f *FileManager) DirExists(dir string) bool {
-	// Verify that the PVC is mounted on the correct path:
 	info, err := os.Stat(dir)
 	if os.IsNotExist(err) {
 		log.Errorf("%s directory does not exist. is pvc mounted?", dir)

@@ -7,7 +7,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.29.3
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.49.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.75.1
-	github.com/cbartram/hearthhub-mod-api v0.0.0-20250208235023-feb25c37247a
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.12.0

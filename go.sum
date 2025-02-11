@@ -36,8 +36,6 @@ github.com/aws/aws-sdk-go-v2/service/sts v1.33.11 h1:RIXOjp7Dp4siCYJRwBHUcBdVgOW
 github.com/aws/aws-sdk-go-v2/service/sts v1.33.11/go.mod h1:ZR17k9bPKPR8u0IkyA6xVsjr56doNQ4ZB1fs7abYBfE=
 github.com/aws/smithy-go v1.22.2 h1:6D9hW43xKFrRx/tXXfAlIZc4JI+yQe6snnWcQyxSyLQ=
 github.com/aws/smithy-go v1.22.2/go.mod h1:irrKGvNn1InZwb2d7fkIRNucdfwR8R+Ts3wxYa/cJHg=
-github.com/cbartram/hearthhub-mod-api v0.0.0-20250208235023-feb25c37247a h1:3uRjOmEPw3GGeiLygrwB6M3dNeWmj2BWmMeHVNv8GuM=
-github.com/cbartram/hearthhub-mod-api v0.0.0-20250208235023-feb25c37247a/go.mod h1:dpOm35swwgA88TgUz4GztbsBBWsOp7orqpTQC9P3G/E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=

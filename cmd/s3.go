@@ -67,7 +67,7 @@ func (s *S3Client) DownloadFile(fileManager *FileManager) error {
 // file stay synchronized between S3 and the pvc.
 func SyncWorldFiles(s3Client *S3Client, fileManager *FileManager) error {
 	var tmpManager FileManager
-	if fileManager.Op == "write" {
+	if fileManager.Op == WRITE || fileManager.Op == COPY {
 		if strings.HasSuffix(fileManager.Prefix, ".db") {
 			log.Infof("file is a *.db, syncing paired *.fwl")
 			tmpManager = FileManager{
