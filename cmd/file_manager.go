@@ -72,14 +72,16 @@ func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error)
 		if !strings.HasSuffix(temporaryDestination, "/") {
 			temporaryDestination += "/"
 		}
+		finalPath = fmt.Sprintf("%s%s", temporaryDestination, fileName)
 	} else {
 		// For copy op's we expect the destination to end with a file not a dir
+		// therefore the finalpath will be the passed in destination overwriting the file
 		if strings.HasSuffix(destination, "/") {
 			temporaryDestination = strings.TrimSuffix(destination, "/")
 		}
+		finalPath = temporaryDestination
 	}
 
-	finalPath = fmt.Sprintf("%s%s", temporaryDestination, fileName)
 	log.Infof("full destination path for file: %s", finalPath)
 	return &FileManager{
 		DiscordId:           discordId,
@@ -141,7 +143,32 @@ func (f *FileManager) DoOperation() error {
 			}
 		}
 	}
+
+	listFiles("/root/.config/unity3d/IronGate/Valheim/worlds_local/")
 	return nil
+}
+
+func listFiles(dirPath string) ([]string, error) {
+	log.Infof("current state of files in: %s", dirPath)
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open directory: %w", err)
+	}
+	defer dir.Close()
+
+	fileInfos, err := dir.Readdir(-1) // -1 means read all entries
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	var files []string
+	for _, fileInfo := range fileInfos {
+		if !fileInfo.IsDir() {
+			log.Infof("file: %s, size: %v", fileInfo.Name(), fileInfo.Size())
+		}
+	}
+
+	return files, nil
 }
 
 // DirExists Checks for the presence of a directory on the (assumed) mounted PVC.
