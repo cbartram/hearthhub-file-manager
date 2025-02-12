@@ -21,6 +21,7 @@ type CognitoService interface {
 	AuthUser(ctx context.Context, refreshToken, discordId *string) (*CognitoUser, error)
 	UpdateUserAttributes(ctx context.Context, accessToken *string, attributes []types.AttributeType) error
 	MergeInstalledFiles(ctx context.Context, user *CognitoUser, modName, attributeName, op string) error
+	MergeInstalledBackups(ctx context.Context, user *CognitoUser, backupFileName, op string) error
 }
 
 type CognitoServiceImpl struct {
@@ -79,6 +80,31 @@ func MakeCognitoSecretHash(userId, clientId, clientSecret string) string {
 	return base64.StdEncoding.EncodeToString(digest)
 }
 
+func (c *CognitoServiceImpl) MergeInstalledBackups(ctx context.Context, user *CognitoUser, backupFileName, op string) error {
+	var installedBackupsCognito map[string]bool
+	attributes, err := c.GetUserAttributes(ctx, &user.Credentials.AccessToken)
+	if err != nil {
+		log.Errorf("failed to get user attributes: %v", err)
+		return err
+	}
+
+	for _, attribute := range attributes {
+		if *attribute.Name == "custom:installed_backups" {
+			// Deserialize the json string value of the attribute into a struct
+			err := json.Unmarshal([]byte(*attribute.Value), &installedBackupsCognito)
+			if err != nil {
+				log.Errorf("failed to unmarshal installed mods: %v", err)
+				return err
+			}
+			break
+		}
+	}
+	log.Infof("installed backups before: %v", installedBackupsCognito)
+	installedBackupsCognito[backupFileName] = op == WRITE || op == COPY
+	log.Infof("installed backups after: %v", installedBackupsCognito)
+	return nil
+}
+
 // MergeInstalledFiles Updates a users attribute called: custom:installed_mods merging the existing
 // state with any new mod file that was just installed.
 // Couple of scenarios here:
@@ -115,7 +141,7 @@ func (c *CognitoServiceImpl) MergeInstalledFiles(ctx context.Context, user *Cogn
 			tmp := InstalledFile{
 				Name: mod.Name,
 			}
-			if op == "write" {
+			if op == WRITE || op == COPY {
 				tmp.Installed = true
 			} else {
 				tmp.Installed = false

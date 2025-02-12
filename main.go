@@ -104,7 +104,7 @@ func main() {
 
 	// It was a backup file that was installed
 	if strings.HasSuffix(fileManager.FileDestinationPath, ".fwl") || strings.HasSuffix(fileManager.FileDestinationPath, ".db") {
-		err = cognito.MergeInstalledFiles(context.Background(), user, fileManager.FileName, "custom:installed_backups", fileManager.Op)
+		err = cognito.MergeInstalledBackups(ctx, user, fileManager.FileName, fileManager.Op)
 		if err != nil {
 			log.Fatalf("failed to merge installed backups: %v", err)
 		}
