@@ -96,7 +96,11 @@ func main() {
 	// This check lets us know this is indeed a mod file which has been installed
 	// Therefore, we need to update the user custom:installed_mods with the file that was installed or uninstalled
 	if fileManager.Archive {
-		err = cognito.MergeInstalledFiles(context.Background(), user, fileManager.FileName, "custom:installed_mods", fileManager.Op)
+		modsOnDisk, err := fileManager.ListFiles(cmd.MODS_DIR)
+		if err != nil {
+			log.Fatalf("failed to list mod files: %v", err)
+		}
+		err = cognito.MergeInstalledFiles(ctx, user, modsOnDisk, "custom:installed_mods", fileManager.Op)
 		if err != nil {
 			log.Fatalf("failed to merge installed mods: %v", err)
 		}
@@ -108,7 +112,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to list backup files: %v", err)
 		}
-		err = cognito.MergeInstalledBackups(ctx, user, backupsOnDisk, fileManager.Op)
+		err = cognito.MergeInstalledFiles(ctx, user, backupsOnDisk, "custom:installed_backups", fileManager.Op)
 		if err != nil {
 			log.Fatalf("failed to merge installed backups: %v", err)
 		}
@@ -118,7 +122,6 @@ func main() {
 	// - Users can select a different world or modify server args after a mod/world/config is installed
 	// - Allows users to install multiple mods, files, config, saves without the server having to spin up and down every time
 	// - Once a user is fully done configuring their server they can spin it up once with the PUT /api/v1/server/scale code
-
 	//err = hearthhubClient.ScaleDeployment(fileManager, 1)
 	//if err != nil {
 	//	log.Fatalf("failed to scale deployment back to 1: %v", err)

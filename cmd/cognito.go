@@ -20,8 +20,7 @@ type CognitoService interface {
 	GetUserAttributes(ctx context.Context, accessToken *string) ([]types.AttributeType, error)
 	AuthUser(ctx context.Context, refreshToken, discordId *string) (*CognitoUser, error)
 	UpdateUserAttributes(ctx context.Context, accessToken *string, attributes []types.AttributeType) error
-	MergeInstalledFiles(ctx context.Context, user *CognitoUser, modName, attributeName, op string) error
-	MergeInstalledBackups(ctx context.Context, user *CognitoUser, files []os.FileInfo, op string) error
+	MergeInstalledFiles(ctx context.Context, user *CognitoUser, files []os.FileInfo, attributeName, op string) error
 }
 
 type CognitoServiceImpl struct {
@@ -80,55 +79,8 @@ func MakeCognitoSecretHash(userId, clientId, clientSecret string) string {
 	return base64.StdEncoding.EncodeToString(digest)
 }
 
-func (c *CognitoServiceImpl) MergeInstalledBackups(ctx context.Context, user *CognitoUser, files []os.FileInfo, op string) error {
-	installedBackupsCognito := make(map[string]bool)
-	attributes, err := c.GetUserAttributes(ctx, &user.Credentials.AccessToken)
-	if err != nil {
-		log.Errorf("failed to get user attributes: %v", err)
-		return err
-	}
-
-	for _, attribute := range attributes {
-		if *attribute.Name == "custom:installed_backups" {
-			// Deserialize the json string value of the attribute into a struct
-			err := json.Unmarshal([]byte(*attribute.Value), &installedBackupsCognito)
-			if err != nil {
-				log.Errorf("failed to unmarshal installed mods: %v", err)
-				return err
-			}
-			break
-		}
-	}
-	log.Infof("installed backups before: %v", installedBackupsCognito)
-	for _, backupFileOnDisk := range files {
-		installedBackupsCognito[backupFileOnDisk.Name()] = op == WRITE || op == COPY
-	}
-	log.Infof("installed backups after: %v", installedBackupsCognito)
-
-	mergedBytes, _ := json.Marshal(installedBackupsCognito)
-	attr := types.AttributeType{
-		Name:  aws.String("custom:installed_backups"),
-		Value: aws.String(string(mergedBytes)),
-	}
-
-	err = c.UpdateUserAttributes(ctx, &user.Credentials.AccessToken, []types.AttributeType{attr})
-	if err != nil {
-		log.Errorf("failed to update user attributes: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-// MergeInstalledFiles Updates a users attribute called: custom:installed_mods merging the existing
-// state with any new mod file that was just installed.
-// Couple of scenarios here:
-// - first time the mod is being installed: [] => [{name: mod, installed: true}]
-// - first time uninstall: [{name: mod, installed: false}]
-// - toggling from uninstall to install for existing mod: [{name: mod, installed: false}] => [{name: mod, installed: true}]
-func (c *CognitoServiceImpl) MergeInstalledFiles(ctx context.Context, user *CognitoUser, fileName, attributeName, op string) error {
-	var installedMods []InstalledFile
-
+func (c *CognitoServiceImpl) MergeInstalledFiles(ctx context.Context, user *CognitoUser, files []os.FileInfo, attributeName, op string) error {
+	installedFilesCognito := make(map[string]bool)
 	attributes, err := c.GetUserAttributes(ctx, &user.Credentials.AccessToken)
 	if err != nil {
 		log.Errorf("failed to get user attributes: %v", err)
@@ -138,7 +90,7 @@ func (c *CognitoServiceImpl) MergeInstalledFiles(ctx context.Context, user *Cogn
 	for _, attribute := range attributes {
 		if *attribute.Name == attributeName {
 			// Deserialize the json string value of the attribute into a struct
-			err := json.Unmarshal([]byte(*attribute.Value), &installedMods)
+			err := json.Unmarshal([]byte(*attribute.Value), &installedFilesCognito)
 			if err != nil {
 				log.Errorf("failed to unmarshal installed mods: %v", err)
 				return err
@@ -146,45 +98,16 @@ func (c *CognitoServiceImpl) MergeInstalledFiles(ctx context.Context, user *Cogn
 			break
 		}
 	}
-
-	var mergedMods []InstalledFile
-	foundMod := false
-	for _, mod := range installedMods {
-		// case 2 and 3: mod already exists in the list (it's been installed before), toggle its value accordingly
-		if mod.Name == fileName {
-			log.Infof("mod %s already exists in user attributes", mod.Name)
-			tmp := InstalledFile{
-				Name: mod.Name,
-			}
-			if op == WRITE || op == COPY {
-				tmp.Installed = true
-			} else {
-				tmp.Installed = false
-			}
-			log.Infof("updating InstalledMod{name=%s, installed=%v}", tmp.Name, tmp.Installed)
-			mergedMods = append(mergedMods, tmp)
-			foundMod = true
-		} else {
-			// Leave other installed mods alone
-			mergedMods = append(mergedMods, mod)
-		}
+	log.Infof("installed %s before: %v", attributeName, installedFilesCognito)
+	for _, backupFileOnDisk := range files {
+		installedFilesCognito[backupFileOnDisk.Name()] = op == WRITE || op == COPY
 	}
+	log.Infof("installed %s after: %v", attributeName, installedFilesCognito)
 
-	// case 1: Mod does not exist in the list (it's the first time installing)
-	if !foundMod {
-		log.Infof("mod %s not found in user attributes, first time install", fileName)
-		mergedMods = append(mergedMods, InstalledFile{
-			Name:      fileName,
-			Installed: true,
-		})
-	}
-
-	// Serialize the installed mods to json
-	mergedModByte, _ := json.Marshal(mergedMods)
-	mergedModStr := string(mergedModByte)
+	mergedBytes, _ := json.Marshal(installedFilesCognito)
 	attr := types.AttributeType{
 		Name:  aws.String(attributeName),
-		Value: &mergedModStr,
+		Value: aws.String(string(mergedBytes)),
 	}
 
 	err = c.UpdateUserAttributes(ctx, &user.Credentials.AccessToken, []types.AttributeType{attr})
