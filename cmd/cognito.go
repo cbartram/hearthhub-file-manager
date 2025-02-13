@@ -81,7 +81,7 @@ func MakeCognitoSecretHash(userId, clientId, clientSecret string) string {
 }
 
 func (c *CognitoServiceImpl) MergeInstalledBackups(ctx context.Context, user *CognitoUser, backupFileName, op string) error {
-	var installedBackupsCognito map[string]bool
+	installedBackupsCognito := make(map[string]bool)
 	attributes, err := c.GetUserAttributes(ctx, &user.Credentials.AccessToken)
 	if err != nil {
 		log.Errorf("failed to get user attributes: %v", err)
@@ -102,6 +102,19 @@ func (c *CognitoServiceImpl) MergeInstalledBackups(ctx context.Context, user *Co
 	log.Infof("installed backups before: %v", installedBackupsCognito)
 	installedBackupsCognito[backupFileName] = op == WRITE || op == COPY
 	log.Infof("installed backups after: %v", installedBackupsCognito)
+
+	mergedBytes, _ := json.Marshal(installedBackupsCognito)
+	attr := types.AttributeType{
+		Name:  aws.String("custom:installed_backups"),
+		Value: aws.String(string(mergedBytes)),
+	}
+
+	err = c.UpdateUserAttributes(ctx, &user.Credentials.AccessToken, []types.AttributeType{attr})
+	if err != nil {
+		log.Errorf("failed to update user attributes: %v", err)
+		return err
+	}
+
 	return nil
 }
 
