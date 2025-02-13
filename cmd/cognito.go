@@ -21,7 +21,7 @@ type CognitoService interface {
 	AuthUser(ctx context.Context, refreshToken, discordId *string) (*CognitoUser, error)
 	UpdateUserAttributes(ctx context.Context, accessToken *string, attributes []types.AttributeType) error
 	MergeInstalledFiles(ctx context.Context, user *CognitoUser, modName, attributeName, op string) error
-	MergeInstalledBackups(ctx context.Context, user *CognitoUser, backupFileName, op string) error
+	MergeInstalledBackups(ctx context.Context, user *CognitoUser, files []os.FileInfo, op string) error
 }
 
 type CognitoServiceImpl struct {
@@ -80,7 +80,7 @@ func MakeCognitoSecretHash(userId, clientId, clientSecret string) string {
 	return base64.StdEncoding.EncodeToString(digest)
 }
 
-func (c *CognitoServiceImpl) MergeInstalledBackups(ctx context.Context, user *CognitoUser, backupFileName, op string) error {
+func (c *CognitoServiceImpl) MergeInstalledBackups(ctx context.Context, user *CognitoUser, files []os.FileInfo, op string) error {
 	installedBackupsCognito := make(map[string]bool)
 	attributes, err := c.GetUserAttributes(ctx, &user.Credentials.AccessToken)
 	if err != nil {
@@ -100,7 +100,9 @@ func (c *CognitoServiceImpl) MergeInstalledBackups(ctx context.Context, user *Co
 		}
 	}
 	log.Infof("installed backups before: %v", installedBackupsCognito)
-	installedBackupsCognito[backupFileName] = op == WRITE || op == COPY
+	for _, backupFileOnDisk := range files {
+		installedBackupsCognito[backupFileOnDisk.Name()] = op == WRITE || op == COPY
+	}
 	log.Infof("installed backups after: %v", installedBackupsCognito)
 
 	mergedBytes, _ := json.Marshal(installedBackupsCognito)

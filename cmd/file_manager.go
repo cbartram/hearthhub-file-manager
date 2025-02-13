@@ -23,9 +23,10 @@ type FileManager struct {
 }
 
 var (
-	COPY   = "copy"
-	WRITE  = "write"
-	DELETE = "delete"
+	COPY        = "copy"
+	WRITE       = "write"
+	DELETE      = "delete"
+	BACKUPS_DIR = "/root/.config/unity3d/IronGate/Valheim/worlds_local/"
 )
 
 func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error) {
@@ -144,12 +145,19 @@ func (f *FileManager) DoOperation() error {
 		}
 	}
 
-	listFiles("/root/.config/unity3d/IronGate/Valheim/worlds_local/")
+	log.Infof("current state of files in: %s", BACKUPS_DIR)
+	files, err := f.ListFiles(BACKUPS_DIR)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		log.Infof("file: %s, size: %v", file.Name(), file.Size())
+	}
 	return nil
 }
 
-func listFiles(dirPath string) ([]string, error) {
-	log.Infof("current state of files in: %s", dirPath)
+func (f *FileManager) ListFiles(dirPath string) ([]os.FileInfo, error) {
 	dir, err := os.Open(dirPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open directory: %w", err)
@@ -161,10 +169,10 @@ func listFiles(dirPath string) ([]string, error) {
 		return nil, fmt.Errorf("failed to read directory: %w", err)
 	}
 
-	var files []string
+	var files []os.FileInfo
 	for _, fileInfo := range fileInfos {
 		if !fileInfo.IsDir() {
-			log.Infof("file: %s, size: %v", fileInfo.Name(), fileInfo.Size())
+			files = append(files, fileInfo)
 		}
 	}
 
