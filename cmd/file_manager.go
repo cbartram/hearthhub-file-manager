@@ -147,7 +147,9 @@ func (f *FileManager) DoOperation() error {
 	}
 
 	log.Infof("current state of files in: %s", BACKUPS_DIR)
-	files, err := f.ListFiles(BACKUPS_DIR)
+	files, err := f.ListFiles(BACKUPS_DIR, func(fileName string) bool {
+		return true
+	})
 	if err != nil {
 		return err
 	}
@@ -158,7 +160,8 @@ func (f *FileManager) DoOperation() error {
 	return nil
 }
 
-func (f *FileManager) ListFiles(dirPath string) ([]os.FileInfo, error) {
+// ListFiles List files in a given directory and adds files to a list which pass the given predicate function.
+func (f *FileManager) ListFiles(dirPath string, predicate func(string) bool) ([]os.FileInfo, error) {
 	dir, err := os.Open(dirPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open directory: %w", err)
@@ -172,7 +175,7 @@ func (f *FileManager) ListFiles(dirPath string) ([]os.FileInfo, error) {
 
 	var files []os.FileInfo
 	for _, fileInfo := range fileInfos {
-		if !fileInfo.IsDir() {
+		if !fileInfo.IsDir() && predicate(fileInfo.Name()) {
 			files = append(files, fileInfo)
 		}
 	}

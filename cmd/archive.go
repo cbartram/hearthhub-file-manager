@@ -41,15 +41,17 @@ func (a *Archive) RemoveFilesFromZip() error {
 	return nil
 }
 
+// UnzipFile Unpacks an archived zip file to the specified path in the Archive class. Note:
+// it is very important that the zip file is NOT cleaned up after unpack. Zip file names are used by the frontend
+// as the source of truth for a mod. If the .dll files in the zip for the mod name don't match the zip file name
+// then there are problems identifying which mods are actually installed. Therefore, leave the zip file alone after it's
+// been downloaded!! Future downloads will just overwrite it so no big deal.
 func (a *Archive) UnzipFile() error {
 	reader, err := zip.OpenReader(a.ZipFilePath)
 	if err != nil {
 		return err
 	}
 	defer reader.Close()
-
-	// Cleanup
-	defer os.Remove(a.ZipFilePath)
 
 	for _, file := range reader.File {
 		path := filepath.Join(a.Destination, file.Name)

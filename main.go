@@ -96,7 +96,12 @@ func main() {
 	// This check lets us know this is indeed a mod file which has been installed
 	// Therefore, we need to update the user custom:installed_mods with the file that was installed or uninstalled
 	if fileManager.Archive {
-		modsOnDisk, err := fileManager.ListFiles(cmd.MODS_DIR)
+
+		// We don't delete the .zip files after mods are installed. This ensures we match the same name as in S3
+		// when inserting into cognito and the frontend installed mods can be matched appropriately.
+		modsOnDisk, err := fileManager.ListFiles(cmd.MODS_DIR, func(fileName string) bool {
+			return strings.HasSuffix(fileName, ".zip")
+		})
 		if err != nil {
 			log.Fatalf("failed to list mod files: %v", err)
 		}
@@ -108,7 +113,11 @@ func main() {
 
 	// It was a backup file that was installed
 	if strings.HasSuffix(fileManager.FileDestinationPath, ".fwl") || strings.HasSuffix(fileManager.FileDestinationPath, ".db") {
-		backupsOnDisk, err := fileManager.ListFiles(cmd.BACKUPS_DIR)
+		// Allow only files which are not *_backup_auto-* since those files are replica backups there's no badge for install status
+		// on the UI for them and therefore they don't need to be stored in cognito wasting space.
+		backupsOnDisk, err := fileManager.ListFiles(cmd.BACKUPS_DIR, func(fileName string) bool {
+			return !strings.Contains(fileName, "_backup_auto-")
+		})
 		if err != nil {
 			log.Fatalf("failed to list backup files: %v", err)
 		}

@@ -100,6 +100,8 @@ func (c *CognitoServiceImpl) MergeInstalledFiles(ctx context.Context, user *Cogn
 	}
 	log.Infof("installed %s before: %v", attributeName, installedFilesCognito)
 	for _, backupFileOnDisk := range files {
+		// TODO This will be the name of the DLL not the name of the zip. Frontend uses the S3 names as the source of truth
+		// so we need to keep the zip files on disk so we can read and filter for them.
 		installedFilesCognito[backupFileOnDisk.Name()] = op == WRITE || op == COPY
 	}
 	log.Infof("installed %s after: %v", attributeName, installedFilesCognito)
