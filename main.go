@@ -93,10 +93,7 @@ func main() {
 		log.Fatalf("failed to authenticate user: %v", err)
 	}
 
-	// This check lets us know this is indeed a mod file which has been installed
-	// Therefore, we need to update the user custom:installed_mods with the file that was installed or uninstalled
 	if fileManager.Archive {
-
 		// We don't delete the .zip files after mods are installed. This ensures we match the same name as in S3
 		// when inserting into cognito and the frontend installed mods can be matched appropriately.
 		modsOnDisk, err := fileManager.ListFiles(cmd.MODS_DIR, func(fileName string) bool {
@@ -111,7 +108,6 @@ func main() {
 		}
 	}
 
-	// It was a backup file that was installed
 	if strings.HasSuffix(fileManager.FileDestinationPath, ".fwl") || strings.HasSuffix(fileManager.FileDestinationPath, ".db") {
 		// Allow only files which are not *_backup_auto-* since those files are replica backups there's no badge for install status
 		// on the UI for them and therefore they don't need to be stored in cognito wasting space.
@@ -127,6 +123,20 @@ func main() {
 		}
 	}
 
+	if isConfigFile(fileManager.FileDestinationPath) {
+		configOnDisk, err := fileManager.ListFiles(cmd.CONFIG_DIR, func(s string) bool {
+			return isConfigFile(s)
+		})
+		if err != nil {
+			log.Fatalf("failed to list config files: %v", err)
+		}
+
+		err = cognito.MergeInstalledFiles(ctx, user, configOnDisk, "custom:installed_config", fileManager.Op)
+		if err != nil {
+			log.Fatalf("failed to merge installed backups: %v", err)
+		}
+	}
+
 	// Scaling the server back up has been disabled because
 	// - Users can select a different world or modify server args after a mod/world/config is installed
 	// - Allows users to install multiple mods, files, config, saves without the server having to spin up and down every time
@@ -136,4 +146,8 @@ func main() {
 	//	log.Fatalf("failed to scale deployment back to 1: %v", err)
 	//}
 	log.Infof("done.")
+}
+
+func isConfigFile(path string) bool {
+	return strings.HasSuffix(path, ".cfg") || strings.HasSuffix(path, ".json") || strings.HasSuffix(path, ".yaml")
 }
