@@ -32,34 +32,39 @@ func MakeS3Client(cfg aws.Config) *S3Client {
 // DownloadFile Downloads a file (zip, config, world save or otherwise) from S3 and writes it to the specified destination on disk.
 // This function does not unzip the file.
 func (s *S3Client) DownloadFile(fileManager *FileManager) error {
-	result, err := s.client.GetObject(context.Background(), &s3.GetObjectInput{
-		Bucket: aws.String(s.BucketName),
-		Key:    aws.String(fileManager.Prefix),
-	})
-	if err != nil {
-		return errors.New(fmt.Sprintf("failed to get object s3://%v/%v err: %v", s.BucketName, fileManager.Prefix, err))
-	}
+	if fileManager.Op == WRITE || fileManager.Op == COPY {
+		result, err := s.client.GetObject(context.Background(), &s3.GetObjectInput{
+			Bucket: aws.String(s.BucketName),
+			Key:    aws.String(fileManager.Prefix),
+		})
+		if err != nil {
+			return errors.New(fmt.Sprintf("failed to get object s3://%v/%v err: %v", s.BucketName, fileManager.Prefix, err))
+		}
 
-	defer result.Body.Close()
+		defer result.Body.Close()
 
-	log.Infof("creating file with name: %s in %s", fileManager.FileName, fileManager.FileDestinationPath)
-	file, err := os.Create(fileManager.FileDestinationPath)
+		log.Infof("creating file with name: %s in %s", fileManager.FileName, fileManager.FileDestinationPath)
+		file, err := os.Create(fileManager.FileDestinationPath)
 
-	if err != nil {
-		log.Errorf("failed to create file %v err: %v", fileManager.Prefix, err)
+		if err != nil {
+			log.Errorf("failed to create file %v err: %v", fileManager.Prefix, err)
+			return err
+		}
+
+		defer file.Close()
+		body, err := io.ReadAll(result.Body)
+
+		if err != nil {
+			log.Errorf("failed to read object body from %v error: %v", fileManager.Prefix, err)
+			return err
+		}
+		_, err = file.Write(body)
+
 		return err
+	} else {
+		log.Infof("skipping s3 download of file: file op is delete")
+		return nil
 	}
-
-	defer file.Close()
-	body, err := io.ReadAll(result.Body)
-
-	if err != nil {
-		log.Errorf("failed to read object body from %v error: %v", fileManager.Prefix, err)
-		return err
-	}
-	_, err = file.Write(body)
-
-	return err
 }
 
 // SyncWorldFiles Synchronizes a .db or .fwl file along with its pair to disk. I.e. if the prefix for the file

@@ -58,7 +58,6 @@ func main() {
 		log.Fatal("required conf, backup, or mod directory does not exist")
 	}
 
-	// Download and unzip the mod file from S3 unpacking it onto the PVC
 	s3Client := cmd.MakeS3Client(cfg)
 	err = s3Client.DownloadFile(fileManager)
 	if err != nil {
@@ -68,8 +67,6 @@ func main() {
 	if err != nil {
 		log.Errorf("failed to sync world files: %v", err)
 	}
-
-	log.Infof("file: %s downloaded successfully to: %s for user: %s", fileManager.Prefix, fileManager.FileDestinationPath, fileManager.DiscordId)
 
 	err = fileManager.DoOperation()
 	if err != nil {
