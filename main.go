@@ -5,9 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/cbartram/hearthhub-plugin-manager/cmd"
+	"github.com/cbartram/hearthhub-common/model"
+	"github.com/cbartram/hearthhub-common/service"
+	"github.com/cbartram/hearthhub-file-manager/cmd"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -51,13 +54,14 @@ func main() {
 	}
 
 	// TODO Don't love this I'd rather poll the API to find out when the server is in termination status
-	log.Infof("sleeping for 15 seconds to allow server to terminate")
-	time.Sleep(15 * time.Second)
+	log.Infof("sleeping for 7 seconds to allow server to terminate")
+	time.Sleep(7 * time.Second)
 
 	if !fileManager.DirExists(modPath) || !fileManager.DirExists(configPath) || !fileManager.DirExists(backupsPath) {
 		log.Fatal("required conf, backup, or mod directory does not exist")
 	}
 
+	db := model.Connect()
 	s3Client := cmd.MakeS3Client(cfg)
 	err = s3Client.DownloadFile(fileManager)
 	if err != nil {
@@ -84,53 +88,100 @@ func main() {
 		Body:      fmt.Sprintf(`{"containerName": "%s", "operation": "%s", "containerType": "file-install"}`, os.Getenv("HOSTNAME"), fileManager.Op),
 		DiscordId: fileManager.DiscordId,
 	})
-	cognito := cmd.MakeCognitoService(cfg)
-	user, err := cognito.AuthUser(context.Background(), &fileManager.RefreshToken, &fileManager.DiscordId)
+	cognito := service.MakeCognitoService(cfg)
+	_, err = cognito.AuthUser(context.Background(), &fileManager.RefreshToken, &fileManager.DiscordId, db)
 	if err != nil {
 		log.Fatalf("failed to authenticate user: %v", err)
 	}
 
+	var user model.User
+	db.Where("discord_id = ?", fileManager.DiscordId).First(&user)
+
 	if fileManager.Archive {
+		user.ModFiles = []model.ModFile{}
 		// We don't delete the .zip files after mods are installed. This ensures we match the same name as in S3
-		// when inserting into cognito and the frontend installed mods can be matched appropriately.
+		// when inserting into the db and the frontend installed mods can be matched appropriately.
 		modsOnDisk, err := fileManager.ListFiles(cmd.MODS_DIR, func(fileName string) bool {
 			return strings.HasSuffix(fileName, ".zip")
 		})
 		if err != nil {
 			log.Fatalf("failed to list mod files: %v", err)
 		}
-		err = cognito.MergeInstalledFiles(ctx, user, modsOnDisk, "custom:installed_mods", fileManager.Op)
-		if err != nil {
-			log.Fatalf("failed to merge installed mods: %v", err)
+
+		user.ModFiles = []model.ModFile{}
+		for _, mod := range modsOnDisk {
+			// TODO API Call to NexusMods
+			user.ModFiles = append(user.ModFiles, model.ModFile{
+				BaseFile: model.BaseFile{
+					FileName:  filepath.Base(mod.Name()),
+					S3Key:     fmt.Sprintf("mods/%s/%s", user.DiscordID, filepath.Base(mod.Name())),
+					Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
+				},
+				UpVotes:            0,
+				Downloads:          0,
+				OriginalUploadDate: time.Time{},
+				LatestUploadDate:   time.Time{},
+				Creator:            "",
+				HeroImage:          "",
+				Description:        "",
+			})
 		}
 	}
 
 	if strings.HasSuffix(fileManager.FileDestinationPath, ".fwl") || strings.HasSuffix(fileManager.FileDestinationPath, ".db") {
+		user.WorldFiles = []model.WorldFile{}
+		user.BackupFiles = []model.BackupFile{}
+
 		// Allow only files which are not *_backup_auto-* since those files are replica backups there's no badge for install status
 		// on the UI for them and therefore they don't need to be stored in cognito wasting space.
-		backupsOnDisk, err := fileManager.ListFiles(cmd.BACKUPS_DIR, func(fileName string) bool {
-			return !strings.Contains(fileName, "_backup_auto-")
+		backups, err := fileManager.ListFiles(cmd.BACKUPS_DIR, func(fileName string) bool {
+			return filepath.Ext(fileName) == ".db" || filepath.Ext(fileName) == ".fwl"
 		})
+
 		if err != nil {
 			log.Fatalf("failed to list backup files: %v", err)
 		}
-		err = cognito.MergeInstalledFiles(ctx, user, backupsOnDisk, "custom:installed_backups", fileManager.Op)
-		if err != nil {
-			log.Fatalf("failed to merge installed backups: %v", err)
+
+		for _, file := range backups {
+			if !strings.Contains(file.Name(), "_backup_auto-") {
+				user.WorldFiles = append(user.WorldFiles, model.WorldFile{
+					BaseFile: model.BaseFile{
+						FileName:  filepath.Base(file.Name()),
+						S3Key:     fmt.Sprintf("valheim-backups-auto/%s/%s", user.DiscordID, filepath.Base(file.Name())),
+						Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
+					},
+					ServerID: user.Servers[0].ID,
+				})
+			} else {
+				user.BackupFiles = append(user.BackupFiles, model.BackupFile{
+					BaseFile: model.BaseFile{
+						FileName:  filepath.Base(file.Name()),
+						S3Key:     fmt.Sprintf("valheim-backups-auto/%s/%s", user.DiscordID, filepath.Base(file.Name())),
+						Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
+					},
+				})
+			}
 		}
 	}
 
 	if isConfigFile(fileManager.FileDestinationPath) {
-		configOnDisk, err := fileManager.ListFiles(cmd.CONFIG_DIR, func(s string) bool {
+		user.ConfigFiles = []model.ConfigFile{}
+
+		configFiles, err := fileManager.ListFiles(cmd.CONFIG_DIR, func(s string) bool {
 			return isConfigFile(s)
 		})
 		if err != nil {
 			log.Fatalf("failed to list config files: %v", err)
 		}
 
-		err = cognito.MergeInstalledFiles(ctx, user, configOnDisk, "custom:installed_config", fileManager.Op)
-		if err != nil {
-			log.Fatalf("failed to merge installed backups: %v", err)
+		for _, file := range configFiles {
+			user.ConfigFiles = append(user.ConfigFiles, model.ConfigFile{
+				BaseFile: model.BaseFile{
+					FileName:  filepath.Base(file.Name()),
+					S3Key:     fmt.Sprintf("config/%s/%s", user.DiscordID, filepath.Base(file.Name())),
+					Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
+				},
+			})
 		}
 	}
 
@@ -142,6 +193,7 @@ func main() {
 	//if err != nil {
 	//	log.Fatalf("failed to scale deployment back to 1: %v", err)
 	//}
+	db.Save(user)
 	log.Infof("done.")
 }
 
