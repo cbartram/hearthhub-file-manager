@@ -6,11 +6,12 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.75.1
-	github.com/cbartram/hearthhub-common v0.0.0-20250303203342-2dd7b8a6d452
+	github.com/cbartram/hearthhub-common v0.0.0-20250304151956-c7c08a12e3d7
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.12.0
 	github.com/stretchr/testify v1.10.0
+	gorm.io/gorm v1.25.12
 )
 
 require (
@@ -40,5 +41,4 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/mysql v1.5.7 // indirect
-	gorm.io/gorm v1.25.12 // indirect
 )

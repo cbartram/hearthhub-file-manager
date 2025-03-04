@@ -9,6 +9,7 @@ import (
 	"github.com/cbartram/hearthhub-common/service"
 	"github.com/cbartram/hearthhub-file-manager/cmd"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm/clause"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,17 +99,19 @@ func main() {
 	db.Where("discord_id = ?", fileManager.DiscordId).First(&user)
 
 	if fileManager.Archive {
-		user.ModFiles = []model.ModFile{}
+
 		// We don't delete the .zip files after mods are installed. This ensures we match the same name as in S3
 		// when inserting into the db and the frontend installed mods can be matched appropriately.
 		modsOnDisk, err := fileManager.ListFiles(cmd.MODS_DIR, func(fileName string) bool {
 			return strings.HasSuffix(fileName, ".zip")
 		})
+
 		if err != nil {
 			log.Fatalf("failed to list mod files: %v", err)
 		}
 
-		user.ModFiles = []model.ModFile{}
+		cmd.MergeInstalledFiles(user.ModFiles, modsOnDisk, db)
+
 		for _, mod := range modsOnDisk {
 			// TODO API Call to NexusMods
 			user.ModFiles = append(user.ModFiles, model.ModFile{
@@ -129,9 +132,6 @@ func main() {
 	}
 
 	if strings.HasSuffix(fileManager.FileDestinationPath, ".fwl") || strings.HasSuffix(fileManager.FileDestinationPath, ".db") {
-		user.WorldFiles = []model.WorldFile{}
-		user.BackupFiles = []model.BackupFile{}
-
 		// Allow only files which are not *_backup_auto-* since those files are replica backups there's no badge for install status
 		// on the UI for them and therefore they don't need to be stored in cognito wasting space.
 		backups, err := fileManager.ListFiles(cmd.BACKUPS_DIR, func(fileName string) bool {
@@ -161,6 +161,20 @@ func main() {
 					},
 				})
 			}
+		}
+
+		for _, backup := range user.BackupFiles {
+			db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "file_name"}},
+				DoUpdates: clause.AssignmentColumns([]string{"s3_key", "installed"}),
+			}).Create(&backup)
+		}
+
+		for _, world := range user.WorldFiles {
+			db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "file_name"}},
+				DoUpdates: clause.AssignmentColumns([]string{"s3_key", "installed"}),
+			}).Create(&world)
 		}
 	}
 
@@ -193,7 +207,7 @@ func main() {
 	//if err != nil {
 	//	log.Fatalf("failed to scale deployment back to 1: %v", err)
 	//}
-	db.Save(user)
+	db.Save(&user)
 	log.Infof("done.")
 }
 
