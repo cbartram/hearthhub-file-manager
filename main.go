@@ -54,7 +54,6 @@ func main() {
 		log.Fatalf("failed to scale valheim server deployment: %v", err)
 	}
 
-	// TODO Don't love this I'd rather poll the API to find out when the server is in termination status
 	log.Infof("sleeping for 7 seconds to allow server to terminate")
 	time.Sleep(7 * time.Second)
 
@@ -98,36 +97,35 @@ func main() {
 	var user model.User
 	db.Where("discord_id = ?", fileManager.DiscordId).First(&user)
 
-	if fileManager.Archive {
+	var size int64 = 0
+	f, err := os.Stat(fileManager.FileDestinationPath)
+	if err == nil {
+		size = f.Size()
+	}
 
-		// We don't delete the .zip files after mods are installed. This ensures we match the same name as in S3
-		// when inserting into the db and the frontend installed mods can be matched appropriately.
-		modsOnDisk, err := fileManager.ListFiles(cmd.MODS_DIR, func(fileName string) bool {
-			return strings.HasSuffix(fileName, ".zip")
+	if fileManager.Archive {
+		user.ModFiles = append(user.ModFiles, model.ModFile{
+			BaseFile: model.BaseFile{
+				UserID:    user.ID,
+				Size:      size,
+				FileName:  fileManager.FileName,
+				Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
+				S3Key:     fileManager.Prefix,
+			},
+			UpVotes:            0,
+			Downloads:          0,
+			OriginalUploadDate: time.Now(),
+			LatestUploadDate:   time.Now(),
+			Creator:            "",
+			HeroImage:          "",
+			Description:        "",
 		})
 
-		if err != nil {
-			log.Fatalf("failed to list mod files: %v", err)
-		}
-
-		cmd.MergeInstalledFiles(user.ModFiles, modsOnDisk, db)
-
-		for _, mod := range modsOnDisk {
-			// TODO API Call to NexusMods
-			user.ModFiles = append(user.ModFiles, model.ModFile{
-				BaseFile: model.BaseFile{
-					FileName:  filepath.Base(mod.Name()),
-					S3Key:     fmt.Sprintf("mods/%s/%s", user.DiscordID, filepath.Base(mod.Name())),
-					Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
-				},
-				UpVotes:            0,
-				Downloads:          0,
-				OriginalUploadDate: time.Time{},
-				LatestUploadDate:   time.Time{},
-				Creator:            "",
-				HeroImage:          "",
-				Description:        "",
-			})
+		for _, file := range user.ModFiles {
+			db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "file_name"}},
+				DoUpdates: clause.AssignmentColumns([]string{"installed", "size"}),
+			}).Create(&file)
 		}
 	}
 
@@ -146,15 +144,18 @@ func main() {
 			if !strings.Contains(file.Name(), "_backup_auto-") {
 				user.WorldFiles = append(user.WorldFiles, model.WorldFile{
 					BaseFile: model.BaseFile{
+						UserID:    user.ID,
+						Size:      size,
 						FileName:  filepath.Base(file.Name()),
 						S3Key:     fmt.Sprintf("valheim-backups-auto/%s/%s", user.DiscordID, filepath.Base(file.Name())),
 						Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
 					},
-					ServerID: user.Servers[0].ID,
 				})
 			} else {
 				user.BackupFiles = append(user.BackupFiles, model.BackupFile{
 					BaseFile: model.BaseFile{
+						UserID:    user.ID,
+						Size:      size,
 						FileName:  filepath.Base(file.Name()),
 						S3Key:     fmt.Sprintf("valheim-backups-auto/%s/%s", user.DiscordID, filepath.Base(file.Name())),
 						Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
@@ -179,23 +180,21 @@ func main() {
 	}
 
 	if isConfigFile(fileManager.FileDestinationPath) {
-		user.ConfigFiles = []model.ConfigFile{}
-
-		configFiles, err := fileManager.ListFiles(cmd.CONFIG_DIR, func(s string) bool {
-			return isConfigFile(s)
+		user.ConfigFiles = append(user.ConfigFiles, model.ConfigFile{
+			BaseFile: model.BaseFile{
+				UserID:    user.ID,
+				Size:      size,
+				FileName:  fileManager.FileName,
+				S3Key:     fileManager.Prefix,
+				Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
+			},
 		})
-		if err != nil {
-			log.Fatalf("failed to list config files: %v", err)
-		}
 
-		for _, file := range configFiles {
-			user.ConfigFiles = append(user.ConfigFiles, model.ConfigFile{
-				BaseFile: model.BaseFile{
-					FileName:  filepath.Base(file.Name()),
-					S3Key:     fmt.Sprintf("config/%s/%s", user.DiscordID, filepath.Base(file.Name())),
-					Installed: fileManager.Op == cmd.WRITE || fileManager.Op == cmd.COPY,
-				},
-			})
+		for _, c := range user.ConfigFiles {
+			db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "file_name"}},
+				DoUpdates: clause.AssignmentColumns([]string{"s3_key", "installed"}),
+			}).Create(&c)
 		}
 	}
 

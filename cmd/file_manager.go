@@ -4,10 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	common "github.com/cbartram/hearthhub-common/model"
 	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,37 +100,6 @@ func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error)
 			Destination: destination,
 		},
 	}, nil
-}
-
-// MergeInstalledFiles Given a list of user files from the database and files on disk this will update the install status
-// of all user files to match the files which are currently installed on disk. TODO This will grow out of hand
-// with backups as more backups are created by the server, purged from S3 & disk but not ever removed from the users
-// backup_files in the db. Need to have a long term solution for TODO this.
-func MergeInstalledFiles[T common.BaseFile](userFiles []T, filesOnDisk []os.FileInfo, db *gorm.DB) {
-	// Reset installed status for all user files
-	for i := range userFiles {
-		userFiles[i].Installed = false
-	}
-
-	// Check each file on disk against user files
-	for _, diskFile := range filesOnDisk {
-		for i := range userFiles {
-			if diskFile.Name() == userFiles[i].FileName {
-				log.Infof("Found user file: %s which matches disk file.", userFiles[i].FileName)
-				userFiles[i].Installed = true
-				// userFiles[i].Size = diskFile.Size()
-			} else {
-				log.Infof("User file: %s does NOT match disk file: %s", userFiles[i].FileName, diskFile.Name())
-			}
-		}
-	}
-
-	for _, file := range userFiles {
-		db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "file_name"}},
-			DoUpdates: clause.AssignmentColumns([]string{"installed"}), // TODO: potentially include size
-		}).Create(&file)
-	}
 }
 
 // DoOperation Performs the desired operation specified in the "op" flag. This will either unpack a zip to the
