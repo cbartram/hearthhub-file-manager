@@ -152,12 +152,20 @@ func (f *FileManager) DoOperation() error {
 		return err
 	}
 
+	for _, file := range files {
+		log.Infof("%s - %v", file.Name, file.Size())
+	}
+
 	log.Infof("current state of files in: %s", PLUGINS_DIR)
 	files, err = f.ListFiles(PLUGINS_DIR, func(fileName string) bool {
 		return true
 	})
 	if err != nil {
 		return err
+	}
+
+	for _, file := range files {
+		log.Infof("%s - %v", file.Name(), file.Size())
 	}
 
 	log.Infof("current state of files in: %s", CONFIG_DIR)
@@ -169,8 +177,9 @@ func (f *FileManager) DoOperation() error {
 	}
 
 	for _, file := range files {
-		log.Infof("file: %s, size: %v", file.Name(), file.Size())
+		log.Infof("%s - %v", file.Name(), file.Size())
 	}
+
 	return nil
 }
 
