@@ -27,6 +27,8 @@ var (
 	WRITE       = "write"
 	DELETE      = "delete"
 	BACKUPS_DIR = "/root/.config/unity3d/IronGate/Valheim/worlds_local/"
+	PLUGINS_DIR = "/valheim/BepInEx/plugins/"
+	CONFIG_DIR  = "/valheim/BepInEx/config"
 )
 
 func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error) {
@@ -120,10 +122,7 @@ func (f *FileManager) DoOperation() error {
 	} else {
 		log.Infof("job is a delete operation: is archive: %v", f.Archive)
 		if f.Archive {
-			err := f.ArchiveHandler.RemoveFilesFromZip()
-			if err != nil {
-				return err
-			}
+			f.ArchiveHandler.RemoveFilesFromZip()
 		} else {
 			// Handle removing .db and .fwl files when the op is a remove (similar to the s3 sync but opposite)
 			if strings.HasSuffix(f.Prefix, ".db") {
@@ -147,6 +146,22 @@ func (f *FileManager) DoOperation() error {
 
 	log.Infof("current state of files in: %s", BACKUPS_DIR)
 	files, err := f.ListFiles(BACKUPS_DIR, func(fileName string) bool {
+		return true
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Infof("current state of files in: %s", PLUGINS_DIR)
+	files, err = f.ListFiles(PLUGINS_DIR, func(fileName string) bool {
+		return true
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Infof("current state of files in: %s", CONFIG_DIR)
+	files, err = f.ListFiles(CONFIG_DIR, func(fileName string) bool {
 		return true
 	})
 	if err != nil {
