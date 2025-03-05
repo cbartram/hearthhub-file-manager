@@ -153,7 +153,7 @@ func (f *FileManager) DoOperation() error {
 	}
 
 	for _, file := range files {
-		log.Infof("%s - %v", file.Name, file.Size())
+		log.Infof("%s - %v", file.Name(), file.Size())
 	}
 
 	log.Infof("current state of files in: %s", PLUGINS_DIR)
