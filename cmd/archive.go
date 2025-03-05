@@ -18,7 +18,7 @@ type Archive struct {
 func (a *Archive) RemoveFilesFromZip() error {
 	zipReader, err := zip.OpenReader(a.ZipFilePath)
 	if err != nil {
-		log.Fatalf("Failed to open ZIP file: %v", err)
+		log.Infof("failed to open ZIP file: %v", err)
 	}
 	defer zipReader.Close()
 

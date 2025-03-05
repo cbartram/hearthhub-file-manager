@@ -27,8 +27,6 @@ var (
 	WRITE       = "write"
 	DELETE      = "delete"
 	BACKUPS_DIR = "/root/.config/unity3d/IronGate/Valheim/worlds_local/"
-	MODS_DIR    = "/valheim/BepInEx/plugins/"
-	CONFIG_DIR  = "/valheim/BepInEx/config/"
 )
 
 func MakeFileManager(flagSet *flag.FlagSet, args []string) (*FileManager, error) {
